@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import { 
-  Sparkles, Send, Settings, Loader2, Instagram, Youtube, Music2, Check, X, Users, Paperclip, FileText
+  Sparkles, Send, Settings, Loader2, Instagram, Youtube, Music2, Check, X, Users, Paperclip, FileText, Plus, MessageSquare
 } from 'lucide-react';
 import { documents } from '../data/documents';
 
@@ -13,7 +13,10 @@ function SimpleMarkdown({ text }: { text: string }) {
     // Italic
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-600 hover:underline">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-600 hover:underline">$1</a>')
+    // Bullet points (simple)
+    .replace(/^- (.*)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul class="list-disc pl-5 my-2">$1</ul>');
 
   return (
     <div 
@@ -37,6 +40,50 @@ export interface CreatorIQAssistantProps {
   apiKey?: string;
   className?: string;
 }
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  messages: any[];
+};
+
+// --- Seed Data ---
+const defaultGreeting = { role: 'model', parts: [{ text: 'Hello! I am your CreatorIQ AI assistant. I can help you discover new creators or search your CRM. What would you like to do?' }] };
+
+const SEED_SESSIONS: ChatSession[] = [
+  {
+    id: 'session-1',
+    title: 'Summer Skincare Launch',
+    messages: [
+      defaultGreeting,
+      { role: 'user', parts: [{ text: 'Find me 3 beauty creators on TikTok for our summer skincare launch.' }] },
+      { role: 'model', parts: [{ text: 'I found 3 beauty creators on TikTok that fit your criteria. I have added them to your review list.' }] },
+      { role: 'widget', widgetType: 'creatorList', creators: [
+        { id: 'c1', handle: '@glowwithmia', platform: 'TikTok', niche: 'beauty', followers: '450K', status: 'Approved' },
+        { id: 'c2', handle: '@skincarebyjess', platform: 'TikTok', niche: 'beauty', followers: '1.2M', status: 'Pending Review' },
+        { id: 'c3', handle: '@makeupbylily', platform: 'TikTok', niche: 'beauty', followers: '890K', status: 'Rejected' }
+      ]}
+    ]
+  },
+  {
+    id: 'session-2',
+    title: 'Holiday Campaign Brief',
+    messages: [
+      defaultGreeting,
+      { role: 'user', parts: [{ text: 'Can you draft a brief for the Holiday Campaign? Please make sure to follow our brand guidelines.' }] },
+      { role: 'model', parts: [{ text: 'I have reviewed the CreatorIQ Brand Guidelines and Campaign Best Practices.\n\nHere is a draft for your Holiday Campaign brief:\n\n**Campaign:** Holiday 2026\n**Deliverables:** 1x IG Reel and 2x TikToks\n**Timeline:** You will have 2 weeks from product receipt to post your content.\n\n**Content Strategy:**\nWe want your authentic voice! Please do not use a script. Ensure our main holiday message and CTA appear in the first 3 seconds of your video.\n\n**Usage Rights:**\nBy participating, you agree to grant us 30-day digital ads usage rights.\n\nKeep creating!' }] }
+    ]
+  },
+  {
+    id: 'session-3',
+    title: 'Q1 Performance Report',
+    messages: [
+      defaultGreeting,
+      { role: 'user', parts: [{ text: 'Pull the performance report for the "Spring Refresh" campaign.' }] },
+      { role: 'model', parts: [{ text: 'Here is the performance report for the **Spring Refresh** campaign:\n\n- **Posts Published:** 42\n- **Impressions:** 4.5M\n- **Engagements:** 115K\n- **Clicks:** 12K\n- **Estimated Sales:** $45.2K\n\nThe campaign is performing above average, particularly in engagement rate!' }] }
+    ]
+  }
+];
 
 // --- Gemini Setup ---
 const discoverCreatorsDeclaration: FunctionDeclaration = {
@@ -183,19 +230,48 @@ const getCampaignReportDeclaration: FunctionDeclaration = {
 
 // --- Main Assistant Component ---
 export function CreatorIQAssistant({ apiKey, className = '' }: CreatorIQAssistantProps) {
-  const [messages, setMessages] = useState<any[]>([
-    { role: 'model', parts: [{ text: 'Hello! I am your CreatorIQ AI assistant. I can help you discover new creators or search your CRM. What would you like to do?' }] }
-  ]);
-
+  const [sessions, setSessions] = useState<ChatSession[]>(SEED_SESSIONS);
+  const [activeSessionId, setActiveSessionId] = useState<string>(SEED_SESSIONS[0].id);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+  const messages = activeSession.messages;
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, activeSessionId]);
+
+  const handleNewChat = () => {
+    const newId = 'session-' + Date.now();
+    setSessions(prev => [{
+      id: newId,
+      title: 'New Chat',
+      messages: [defaultGreeting]
+    }, ...prev]);
+    setActiveSessionId(newId);
+  };
+
+  const updateSessionMessages = (sessionId: string, newMessages: any[]) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === sessionId) {
+        let newTitle = s.title;
+        // Auto-generate title for new chats based on first user message
+        if (s.title === 'New Chat' && newMessages.length > 1) {
+          const firstUserMsg = newMessages.find(m => m.role === 'user' && m.parts?.[0]?.text);
+          if (firstUserMsg) {
+            newTitle = firstUserMsg.parts[0].text.slice(0, 25) + '...';
+          }
+        }
+        return { ...s, title: newTitle, messages: newMessages };
+      }
+      return s;
+    }));
+  };
 
   const sendMessage = async (text: string, fileData?: { data: string, mimeType: string, name: string }) => {
     setIsLoading(true);
+    const currentSessionId = activeSessionId;
     
     const parts: any[] = [];
     if (fileData) {
@@ -212,10 +288,14 @@ export function CreatorIQAssistant({ apiKey, className = '' }: CreatorIQAssistan
 
     const newUserMsg = { role: 'user', parts, attachmentName: fileData?.name };
     const newHistory = [...messages, newUserMsg];
-    setMessages(newHistory);
+    updateSessionMessages(currentSessionId, newHistory);
 
     try {
-      const activeKey = apiKey || process.env.GEMINI_API_KEY;
+      // Safe cross-environment check for Vite and standard Node environments
+      const activeKey = apiKey || 
+        (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GEMINI_API_KEY : undefined) || 
+        (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : undefined);
+
       if (!activeKey) {
         throw new Error("API key is missing. Please configure your Gemini API key.");
       }
@@ -346,57 +426,92 @@ export function CreatorIQAssistant({ apiKey, className = '' }: CreatorIQAssistan
         currentHistory.push(responseMsg);
       }
       
-      setMessages([...currentHistory]);
+      updateSessionMessages(currentSessionId, currentHistory);
     } catch (error: any) {
       console.error(error);
       const errorMessage = error.message?.includes("API key is missing") 
         ? "API key is missing. Please configure your Gemini API key in the settings."
         : "Sorry, I encountered an error processing your request.";
-      setMessages(prev => [...prev, { role: 'model', parts: [{ text: errorMessage }] }]);
+      updateSessionMessages(currentSessionId, [...messages, { role: 'model', parts: [{ text: errorMessage }] }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleUpdateCreatorStatus = (messageIndex: number, creatorId: string, status: Creator['status']) => {
-    setMessages(prev => {
-      const newMessages = [...prev];
-      const msg = newMessages[messageIndex];
-      if (msg && msg.role === 'widget' && msg.creators) {
-        msg.creators = msg.creators.map((c: Creator) => c.id === creatorId ? { ...c, status } : c);
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) {
+        const newMessages = [...s.messages];
+        const msg = newMessages[messageIndex];
+        if (msg && msg.role === 'widget' && msg.creators) {
+          msg.creators = msg.creators.map((c: Creator) => c.id === creatorId ? { ...c, status } : c);
+        }
+        return { ...s, messages: newMessages };
       }
-      return newMessages;
-    });
+      return s;
+    }));
   };
 
   return (
-    <div className={`flex flex-col h-full bg-white text-slate-900 font-sans ${className}`}>
-      <main className="flex-1 overflow-auto p-6 flex flex-col items-center bg-slate-50/50">
-        <div className="w-full max-w-4xl space-y-6 pb-4">
-          {messages.map((msg, i) => (
-            <ChatMessage 
-              key={i} 
-              message={msg} 
-              onUpdateCreatorStatus={(id, status) => handleUpdateCreatorStatus(i, id, status)} 
-            />
+    <div className={`flex h-full bg-white text-slate-900 font-sans ${className}`}>
+      {/* Sidebar */}
+      <div className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
+        <div className="p-4 border-b border-slate-200">
+          <button 
+            onClick={handleNewChat} 
+            className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-blue-500 hover:text-blue-600 text-slate-700 px-4 py-2.5 rounded-xl shadow-sm transition-colors font-medium text-sm"
+          >
+            <Plus size={16} />
+            New Chat
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+          {sessions.map(session => (
+            <button
+              key={session.id}
+              onClick={() => setActiveSessionId(session.id)}
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors ${
+                activeSessionId === session.id 
+                  ? 'bg-blue-50 text-blue-700 font-medium' 
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <MessageSquare size={16} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-600' : 'text-slate-400'}`} />
+              <span className="truncate text-sm">{session.title}</span>
+            </button>
           ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-slate-200 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2 text-slate-500">
-                <Loader2 size={16} className="animate-spin text-blue-600" />
-                <span className="text-sm font-medium">Thinking...</span>
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 overflow-auto p-6 flex flex-col items-center bg-white">
+          <div className="w-full max-w-5xl space-y-6 pb-4">
+            {messages.map((msg, i) => (
+              <ChatMessage 
+                key={i} 
+                message={msg} 
+                onUpdateCreatorStatus={(id, status) => handleUpdateCreatorStatus(i, id, status)} 
+              />
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2 text-slate-500">
+                  <Loader2 size={16} className="animate-spin text-blue-600" />
+                  <span className="text-sm font-medium">Thinking...</span>
+                </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </main>
-      
-      <footer className="p-4 border-t border-slate-200 bg-white shrink-0 flex justify-center shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-10">
-        <div className="w-full max-w-4xl">
-          <ChatInput onSend={sendMessage} disabled={isLoading} />
-        </div>
-      </footer>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </main>
+        
+        <footer className="p-4 border-t border-slate-200 bg-white shrink-0 flex justify-center shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-10">
+          <div className="w-full max-w-5xl">
+            <ChatInput onSend={sendMessage} disabled={isLoading} />
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
