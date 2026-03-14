@@ -1,10 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
-import Markdown from 'react-markdown';
 import { 
   Sparkles, Send, Settings, Loader2, Instagram, Youtube, Music2, Check, X, Users, Paperclip, FileText
 } from 'lucide-react';
 import { documents } from '../data/documents';
+
+// --- Simple Markdown Parser (Dependency-Free) ---
+function SimpleMarkdown({ text }: { text: string }) {
+  const formattedHtml = text
+    // Bold
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-600 hover:underline">$1</a>');
+
+  return (
+    <div 
+      className="whitespace-pre-wrap" 
+      dangerouslySetInnerHTML={{ __html: formattedHtml }} 
+    />
+  );
+}
 
 // --- Types ---
 export type Creator = {
@@ -489,7 +506,7 @@ function ChatMessage({ message, onUpdateCreatorStatus }: { message: any, onUpdat
         )}
         {textParts.map((p: any, i: number) => (
           <div key={i} className={`text-[15px] leading-relaxed ${isModel ? 'prose prose-slate prose-sm max-w-none' : 'whitespace-pre-wrap'}`}>
-            {isModel ? <Markdown>{p.text}</Markdown> : p.text}
+            {isModel ? <SimpleMarkdown text={p.text} /> : p.text}
           </div>
         ))}
       </div>
