@@ -1,0 +1,5 @@
+{
+  "name": "CreatorIQ Task AI",
+  "description": "A simulated AI chat experience for managing work and tasks in a CreatorIQ-like interface.",
+  "requestFramePermissions": []
+}
