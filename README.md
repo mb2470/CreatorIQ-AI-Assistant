@@ -51,20 +51,27 @@ This repository is also configured as a reusable React component library. You ca
 
 ### 1. Installation
 
-You can install this package directly from your Git repository. 
+**Important Note for AI Studio Environments:**
+If you are trying to install this package inside another Google AI Studio environment, **all outbound connections to GitHub are blocked by the environment's proxy** (resulting in 403 errors for both `git+https` and `tarball` URLs). 
 
-**Standard Installation:**
+To use this component in another AI Studio app, you must use one of these two methods:
+
+**Method A: Publish to NPM (Recommended for package usage)**
+1. Clone this repository to your local machine.
+2. Run `npm install` and `npm run build:lib`.
+3. Run `npm login` and `npm publish` to publish it to the public NPM registry.
+4. In your other AI Studio app, run `npm install your-published-package-name`.
+
+**Method B: Direct Copy (Fastest for AI Studio)**
+Since the assistant is largely self-contained, you can simply ask the AI in your other project to:
+1. Create a file named `src/components/CreatorIQAssistant.tsx`.
+2. Copy the contents of this repository's `CreatorIQAssistant.tsx` into it.
+3. Install the required dependencies: `npm install @google/genai react-markdown lucide-react`.
+
+**Standard Installation (For local development or standard CI/CD):**
 ```bash
 npm install git+https://github.com/your-username/your-repo-name.git
 ```
-
-**Alternative Installation (For restricted environments like AI Studio):**
-If your environment blocks `git` or `ssh` connections to GitHub (e.g., you see `CONNECT tunnel failed, response 403`), you can install from the GitHub tarball URL instead. This uses standard HTTPS and bypasses git protocol restrictions:
-
-```bash
-npm install https://github.com/your-username/your-repo-name/tarball/main
-```
-*(Replace `your-username`, `your-repo-name`, and `main` with your actual GitHub details).*
 
 ### 2. Usage
 
