@@ -54,7 +54,7 @@ This repository is also configured as a reusable React component library. You ca
 You can install this package directly from your Git repository (once pushed):
 
 ```bash
-npm install git+https://github.com/your-username/your-repo-name.git
+npm install git+https://https://github.com/mb2470/CreatorIQ-AI-Assistant.git
 ```
 
 *(Alternatively, you can publish this package to npm or a private registry using `npm publish` after running `npm run build:lib`)*.
@@ -75,7 +75,7 @@ function Dashboard() {
       
       {/* The Assistant Component */}
       <div className="h-[600px] w-full max-w-3xl rounded-xl overflow-hidden shadow-lg border border-gray-200">
-        <CreatorIQAssistant apiKey="YOUR_GEMINI_API_KEY" />
+        <CreatorIQAssistant apiKey="GEMINI_API_KEY" />
       </div>
     </div>
   );
