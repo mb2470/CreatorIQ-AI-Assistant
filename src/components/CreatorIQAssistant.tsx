@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import Markdown from 'react-markdown';
 import { 
-  Sparkles, Send, Settings, Loader2, Instagram, Youtube, Music2, Check, X, Users
+  Sparkles, Send, Settings, Loader2, Instagram, Youtube, Music2, Check, X, Users, Paperclip, FileText
 } from 'lucide-react';
 import { documents } from '../data/documents';
 
@@ -30,7 +30,7 @@ const discoverCreatorsDeclaration: FunctionDeclaration = {
     properties: {
       niche: { type: Type.STRING, description: "The niche or category of the creators (e.g., 'beauty', 'gaming', 'tech')." },
       platform: { type: Type.STRING, description: "The platform to search on ('Instagram', 'TikTok', 'YouTube', or 'Any')." },
-      count: { type: Type.NUMBER, description: "Number of creators to discover (default 3, max 5)." }
+      count: { type: Type.NUMBER, description: "Number of creators to discover (default 3, max 100)." }
     },
     required: ["niche"]
   }
@@ -177,10 +177,23 @@ export function CreatorIQAssistant({ apiKey, className = '' }: CreatorIQAssistan
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, fileData?: { data: string, mimeType: string, name: string }) => {
     setIsLoading(true);
     
-    const newUserMsg = { role: 'user', parts: [{ text }] };
+    const parts: any[] = [];
+    if (fileData) {
+      parts.push({
+        inlineData: {
+          data: fileData.data,
+          mimeType: fileData.mimeType
+        }
+      });
+    }
+    if (text.trim()) {
+      parts.push({ text });
+    }
+
+    const newUserMsg = { role: 'user', parts, attachmentName: fileData?.name };
     const newHistory = [...messages, newUserMsg];
     setMessages(newHistory);
 
@@ -468,6 +481,12 @@ function ChatMessage({ message, onUpdateCreatorStatus }: { message: any, onUpdat
   return (
     <div className={`flex ${isModel ? 'justify-start' : 'justify-end'} w-full`}>
       <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm ${isModel ? 'bg-white text-slate-800 rounded-tl-sm border border-slate-200' : 'bg-blue-600 text-white rounded-tr-sm'}`}>
+        {message.attachmentName && (
+          <div className="flex items-center gap-2 bg-blue-700/50 text-blue-50 px-3 py-2 rounded-lg mb-2 text-sm">
+            <FileText size={16} />
+            <span className="truncate font-medium">{message.attachmentName}</span>
+          </div>
+        )}
         {textParts.map((p: any, i: number) => (
           <div key={i} className={`text-[15px] leading-relaxed ${isModel ? 'prose prose-slate prose-sm max-w-none' : 'whitespace-pre-wrap'}`}>
             {isModel ? <Markdown>{p.text}</Markdown> : p.text}
@@ -478,39 +497,91 @@ function ChatMessage({ message, onUpdateCreatorStatus }: { message: any, onUpdat
   );
 }
 
-function ChatInput({ onSend, disabled }: { onSend: (text: string) => void, disabled: boolean }) {
+function ChatInput({ onSend, disabled }: { onSend: (text: string, file?: { data: string, mimeType: string, name: string }) => void, disabled: boolean }) {
   const [text, setText] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleSend = () => {
-    if (text.trim() && !disabled) {
-      onSend(text.trim());
-      setText('');
+    if ((text.trim() || selectedFile) && !disabled) {
+      if (selectedFile) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64String = (reader.result as string).split(',')[1];
+          onSend(text.trim(), { data: base64String, mimeType: selectedFile.type, name: selectedFile.name });
+          setText('');
+          setSelectedFile(null);
+        };
+        reader.readAsDataURL(selectedFile);
+      } else {
+        onSend(text.trim());
+        setText('');
+      }
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFile(e.target.files[0]);
     }
   };
 
   return (
-    <div className="relative flex items-end gap-2">
-      <textarea
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-          }
-        }}
-        placeholder="Ask AI to discover creators or search your CRM..."
-        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-14 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 resize-none min-h-[54px] max-h-[150px] shadow-inner"
-        disabled={disabled}
-        rows={1}
-      />
-      <button 
-        onClick={handleSend}
-        disabled={disabled || !text.trim()}
-        className="absolute right-2 bottom-2 h-[38px] w-[38px] flex items-center justify-center bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-sm"
-      >
-        <Send size={16} className="ml-0.5" />
-      </button>
+    <div className="flex flex-col gap-2">
+      {selectedFile && (
+        <div className="flex items-center justify-between bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <FileText size={16} className="text-blue-600 shrink-0" />
+            <span className="truncate font-medium">{selectedFile.name}</span>
+          </div>
+          <button 
+            onClick={() => setSelectedFile(null)}
+            className="text-slate-400 hover:text-slate-600 p-1"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      <div className="relative flex items-end gap-2">
+        <div className="relative w-full">
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="Ask AI to discover creators or attach a brief..."
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-12 pr-14 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 resize-none min-h-[54px] max-h-[150px] shadow-inner"
+            disabled={disabled}
+            rows={1}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled}
+            className="absolute left-3 bottom-3 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+            title="Attach file"
+          >
+            <Paperclip size={20} />
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            className="hidden" 
+            accept=".pdf,.txt,.csv,.doc,.docx,image/*"
+          />
+        </div>
+        <button 
+          onClick={handleSend}
+          disabled={disabled || (!text.trim() && !selectedFile)}
+          className="h-[54px] w-[54px] shrink-0 flex items-center justify-center bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-sm"
+        >
+          <Send size={20} className="ml-0.5" />
+        </button>
+      </div>
     </div>
   );
 }
